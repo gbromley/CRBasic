@@ -11,6 +11,10 @@ Public lngCS135CRCMsg
 Public lngCS135CRCCalc
 Public lngCS135PSt
 Public lngCS135PEnd
+Public Line3End
+Public Line4End
+Public Line5End
+Public Line6End
 Public CS135ChkSumF As Boolean
 Public CS135StatusInterp As String * 70
 Public CS135MsgStatus As String * 2
@@ -75,12 +79,25 @@ BeginProg
 		PanelTemp(PTemp_C,60)
 		'Get data from CS135 Ceilometer
 		SerialInRecord(ComU1,CS135Str,&h01,0,&h04,CS135_Bytes,01)
+		'check to see if data came'
 		If CS135_Bytes>0 Then
+		  'These find the start and end of the data message'
+		  'CHR(10) is the line feed character'
+		  'Finds location of first line feed i.e. end of line 1'
 			lngCS135PSt=InStr(1,CS135Str,CHR(10),3)
+			'Finds the next line feed'
 			lngCS135PEnd=InStr(lngCS135PSt+1,CS135Str,CHR(10),3)
-			If ((lngCS135PSt>0) And (lngCS135PEnd>0)) Then
+			'finds end of line 3'
+      Line3End=InStr(lngCS135PEnd+1,CS135Str,CHR(10),3)
+      Line4End=InStr(Line3End+1,CS135Str,CHR(10),3)
+      Line5End=InStr(Line4End+1,CS135Str,CHR(10),3)
+      Line6End=InStr(Line5End+1,CS135Str,CHR(10),3)
+			'if the start and end are non-zero'
+			If ((lngCS135PSt>0) AND (lngCS135PEnd>0)) Then
+			  'move is essentially copy'
+			    'get the line 2 of the message'
 				Move(CS135L2,1,Mid(CS135Str,lngCS135PSt,lngCS135PEnd-lngCS135PSt),1)
-				'Two splits, first gets numbers.
+				'Two splits, first gets numbers.'
 				SplitStr(CS135_NumArr(),CS135L2," ",7,5)
 				'Second gets strings.
 				SplitStr(CS135_StrArr(),CS135L2," ",7,5)
@@ -91,7 +108,7 @@ BeginProg
 					CS135ChkSumF = True
 				Else
 					CS135ChkSumF = False
-				Endif
+				EndIf
 				'Get Heights (IEEE4) for table. 
 				FirstHeight_ft=Mid(CS135L2,9,5)
 				SecondHeight_ft=Mid(CS135L2,15,5)
