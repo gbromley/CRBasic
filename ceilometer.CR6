@@ -1,0 +1,126 @@
+'CR6 Series
+'Created by Short Cut (3.2)
+
+'Declare Variables and Units
+Public BattV
+Public PTemp_C
+Public CS135Str As String * 5000
+Public CS135L2 As String * 700
+Public CS135_Bytes
+Public lngCS135CRCMsg
+Public lngCS135CRCCalc
+Public lngCS135PSt
+Public lngCS135PEnd
+Public CS135ChkSumF As Boolean
+Public CS135StatusInterp As String * 70
+Public CS135MsgStatus As String * 2
+Public FirstHeight_ft
+Public SecondHeight_ft
+Public ThirdHeight_ft
+Public FourthHeight_ft
+Public CS135_StrArr(7) As String
+Public CS135_NumArr(7)
+
+Alias CS135_StrArr(1)=CS135Status
+Alias CS135_StrArr(2)=CS135_StrArr2
+Alias CS135_StrArr(3)=CS135_StrArr3
+Alias CS135_StrArr(4)=CS135_StrArr4
+Alias CS135_StrArr(5)=CS135_StrArr5
+Alias CS135_StrArr(6)=CS135_StrArr6
+Alias CS135_StrArr(7)=AlarmFlags
+Alias CS135_NumArr(1)=CS135_NumArr1
+Alias CS135_NumArr(2)=CS135_NumArr2
+Alias CS135_NumArr(3)=CS135_NumArr3
+Alias CS135_NumArr(4)=CS135_NumArr4
+Alias CS135_NumArr(5)=CS135_NumArr5
+Alias CS135_NumArr(6)=CS135_NumArr6
+Alias CS135_NumArr(7)=CS135_NumArr7
+
+Units BattV=Volts
+Units PTemp_C=Deg C
+Units FirstHeight_ft=feet
+Units SecondHeight_ft=feet
+Units ThirdHeight_ft=feet
+Units FourthHeight_ft=feet
+Units CS135Status=unitless
+Units CS135_StrArr2=unitless
+Units CS135_StrArr3=unitless
+Units CS135_StrArr4=unitless
+Units CS135_StrArr5=unitless
+Units CS135_StrArr6=unitless
+Units AlarmFlags=unitless
+Units CS135_NumArr1=unitless
+Units CS135_NumArr2=unitless
+Units CS135_NumArr3=unitless
+Units CS135_NumArr4=unitless
+Units CS135_NumArr5=unitless
+Units CS135_NumArr6=unitless
+Units CS135_NumArr7=unitless
+
+'Define Data Tables
+DataTable(Table2,True,-1)
+	DataInterval(0,1440,Min,10)
+	Minimum(1,BattV,FP2,False,False)
+EndTable
+
+'Main Program
+BeginProg
+	'Open ComU1 for communications with the CS135 Ceilometer
+	SerialOpen(ComU1,115200,3,0,1000)
+	'Main Scan
+	Scan(15,Sec,1,0)
+		'Default CR6 Datalogger Battery Voltage measurement 'BattV'
+		Battery(BattV)
+		'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+		PanelTemp(PTemp_C,60)
+		'Get data from CS135 Ceilometer
+		SerialInRecord(ComU1,CS135Str,&h01,0,&h04,CS135_Bytes,01)
+		If CS135_Bytes>0 Then
+			lngCS135PSt=InStr(1,CS135Str,CHR(10),3)
+			lngCS135PEnd=InStr(lngCS135PSt+1,CS135Str,CHR(10),3)
+			If ((lngCS135PSt>0) And (lngCS135PEnd>0)) Then
+				Move(CS135L2,1,Mid(CS135Str,lngCS135PSt,lngCS135PEnd-lngCS135PSt),1)
+				'Two splits, first gets numbers.
+				SplitStr(CS135_NumArr(),CS135L2," ",7,5)
+				'Second gets strings.
+				SplitStr(CS135_StrArr(),CS135L2," ",7,5)
+				'Check CRC to make sure message is complete and correct
+				lngCS135CRCMsg=HexToDec(Mid(CS135Str,(lngCS135PEnd+2),4))
+				lngCS135CRCCalc=CheckSum(CS135Str,18,CS135_Bytes-4) XOR &HFFFF
+				If (lngCS135CRCCalc=lngCS135CRCMsg) Then 
+					CS135ChkSumF = True
+				Else
+					CS135ChkSumF = False
+				Endif
+				'Get Heights (IEEE4) for table. 
+				FirstHeight_ft=Mid(CS135L2,9,5)
+				SecondHeight_ft=Mid(CS135L2,15,5)
+				ThirdHeight_ft=Mid(CS135L2,21,5)
+				FourthHeight_ft=Mid(CS135L2,27,5)
+				CS135MsgStatus=Mid(CS135Status,Len(CS135Status)-1,1)
+				Select Case CS135MsgStatus
+				Case "0"
+					CS135StatusInterp = "No significant back-scatter"
+				Case "1"
+					CS135StatusInterp = "One cloud base detected"
+				Case "2"
+					CS135StatusInterp = "Two cloud bases detected"
+				Case "3"
+					CS135StatusInterp = "Three cloud bases detected"
+				Case "4"
+					CS135StatusInterp = "Four cloud bases detected"
+				Case "5"
+					CS135StatusInterp = "Full obscuration determined but no cloud base detected"
+				Case "6"
+					CS135StatusInterp = "Some obscuration detected but determined to be transparent"
+				Case "/"
+					CS135StatusInterp = "Raw data input to algorithm missing or suspect"
+				Case Else
+					CS135StatusInterp = "Unable to interpret strStatus " & CS135MsgStatus
+				EndSelect
+			EndIf
+		EndIf
+		'Call Data Tables and Store Data
+		CallTable Table2
+	NextScan
+EndProg
