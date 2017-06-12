@@ -6,6 +6,10 @@ Public BattV
 Public PTemp_C
 Public CS135Str As String * 5000
 Public CS135L2 As String * 700
+Public CS135L3 As String * 700
+Public CS135L4 As String * 700
+Public CS135L5 As String *700
+Public CS135L6 As String * 10000
 Public CS135_Bytes
 Public lngCS135CRCMsg
 Public lngCS135CRCCalc
@@ -25,6 +29,27 @@ Public FourthHeight_ft
 Public CS135_StrArr(7) As String
 Public CS135_NumArr(7)
 
+Public L1_sky_con
+Public L2_sky_con
+Public L3_sky_con
+Public L4_sky_con
+
+Public scale_param
+Public BS_res
+Public Prof_len
+Public las_en
+Public lt
+Public ti
+Public bl
+Public rate
+
+Public mh1
+Public mhq1
+Public mh2
+Public mhq2
+
+Public scatter_prof
+
 Alias CS135_StrArr(1)=CS135Status
 Alias CS135_StrArr(2)=CS135_StrArr2
 Alias CS135_StrArr(3)=CS135_StrArr3
@@ -39,6 +64,27 @@ Alias CS135_NumArr(4)=CS135_NumArr4
 Alias CS135_NumArr(5)=CS135_NumArr5
 Alias CS135_NumArr(6)=CS135_NumArr6
 Alias CS135_NumArr(7)=CS135_NumArr7
+
+Units L1_sky_con=oktas
+Units L2_sky_con=oktas
+Units L3_sky_con=oktas
+Units L4_sky_con=oktas
+
+Units scale_param=percent
+Units BS_res=meters
+Units Prof_len=unitless
+Units las_en=percent
+Units lt=Celsius
+Units bl=millivolts
+Units rate=megahertz
+
+Units mh1=meters
+Units mhq1=unitless
+Units mh2=meters
+Units mhq2=unitless
+
+Units scatter_prof=unitless
+
 
 Units BattV=Volts
 Units PTemp_C=Deg C
@@ -63,81 +109,136 @@ Units CS135_NumArr7=unitless
 
 'Define Data Tables
 DataTable(Table2,True,-1)
-	DataInterval(0,1440,Min,10)
-	Minimum(1,BattV,FP2,False,False)
+  DataInterval(0,15,Sec,0)
+  Minimum(1,BattV,FP2,False,False)
+  Sample (1,CS135MsgStatus,String)
+  Sample (1,AlarmFlags,String)
+  Sample(1,FirstHeight_ft,ieee4)
+  Sample(1,SecondHeight_ft,ieee4)
+  Sample(1,ThirdHeight_ft,ieee4)
+  Sample(1,FourthHeight_ft,ieee4)
+  Sample(1,L1_sky_con,ieee4)
+  Sample(1,L2_sky_con,ieee4)
+  Sample(1,L3_sky_con,ieee4)
+  Sample(1,L4_sky_con,ieee4)
+  Sample(1,scale_param,FP2)
+  Sample(1,BS_res,ieee4)
+  Sample(1,Prof_len,FP2)
+  Sample(1,las_en,FP2)
+  Sample(1,lt,ieee4)
+  Sample(1,bl,ieee4)
+  Sample(1,rate,FP2)
+  Sample(1,mh1,ieee4)
+  Sample(1,mhq1,String)
+  Sample(1,mh2,ieee4)
+  Sample(1,mhq2,ieee4)
+  Sample(1,scatter_prof,ieee4)
+  
 EndTable
 
 'Main Program
 BeginProg
-	'Open ComU1 for communications with the CS135 Ceilometer
-	SerialOpen(ComU1,115200,3,0,1000)
-	'Main Scan
-	Scan(15,Sec,1,0)
-		'Default CR6 Datalogger Battery Voltage measurement 'BattV'
-		Battery(BattV)
-		'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
-		PanelTemp(PTemp_C,60)
-		'Get data from CS135 Ceilometer
-		SerialInRecord(ComU1,CS135Str,&h01,0,&h04,CS135_Bytes,01)
-		'check to see if data came'
-		If CS135_Bytes>0 Then
-		  'These find the start and end of the data message'
-		  'CHR(10) is the line feed character'
-		  'Finds location of first line feed i.e. end of line 1'
-			lngCS135PSt=InStr(1,CS135Str,CHR(10),3)
-			'Finds the next line feed'
-			lngCS135PEnd=InStr(lngCS135PSt+1,CS135Str,CHR(10),3)
-			'finds end of line 3'
+  'Open ComU1 for communications with the CS135 Ceilometer
+  SerialOpen(ComU1,115200,3,0,1000)
+  'Main Scan
+  Scan(15,Sec,1,0)
+    'Default CR6 Datalogger Battery Voltage measurement 'BattV'
+    Battery(BattV)
+    'Default CR6 Datalogger Wiring Panel Temperature measurement 'PTemp_C'
+    PanelTemp(PTemp_C,60)
+    'Get data from CS135 Ceilometer
+    SerialInRecord(ComU1,CS135Str,&h01,0,&h04,CS135_Bytes,01)
+    'check to see if data came'
+    If CS135_Bytes>0 Then
+      'These find the start and end of the data message'
+      'CHR(10) is the line feed character'
+      'Finds location of first line feed i.e. end of line 1'
+      lngCS135PSt=InStr(1,CS135Str,CHR(10),3)
+      'Finds the next line feed'
+      lngCS135PEnd=InStr(lngCS135PSt+1,CS135Str,CHR(10),3)
+      'finds end of line 3'
       Line3End=InStr(lngCS135PEnd+1,CS135Str,CHR(10),3)
       Line4End=InStr(Line3End+1,CS135Str,CHR(10),3)
       Line5End=InStr(Line4End+1,CS135Str,CHR(10),3)
       Line6End=InStr(Line5End+1,CS135Str,CHR(10),3)
-			'if the start and end are non-zero'
-			If ((lngCS135PSt>0) AND (lngCS135PEnd>0)) Then
-			  'move is essentially copy'
-			    'get the line 2 of the message'
-				Move(CS135L2,1,Mid(CS135Str,lngCS135PSt,lngCS135PEnd-lngCS135PSt),1)
-				'Two splits, first gets numbers.'
-				SplitStr(CS135_NumArr(),CS135L2," ",7,5)
-				'Second gets strings.
-				SplitStr(CS135_StrArr(),CS135L2," ",7,5)
-				'Check CRC to make sure message is complete and correct
-				lngCS135CRCMsg=HexToDec(Mid(CS135Str,(lngCS135PEnd+2),4))
-				lngCS135CRCCalc=CheckSum(CS135Str,18,CS135_Bytes-4) XOR &HFFFF
-				If (lngCS135CRCCalc=lngCS135CRCMsg) Then 
-					CS135ChkSumF = True
-				Else
-					CS135ChkSumF = False
-				EndIf
-				'Get Heights (IEEE4) for table. 
-				FirstHeight_ft=Mid(CS135L2,9,5)
-				SecondHeight_ft=Mid(CS135L2,15,5)
-				ThirdHeight_ft=Mid(CS135L2,21,5)
-				FourthHeight_ft=Mid(CS135L2,27,5)
-				CS135MsgStatus=Mid(CS135Status,Len(CS135Status)-1,1)
-				Select Case CS135MsgStatus
-				Case "0"
-					CS135StatusInterp = "No significant back-scatter"
-				Case "1"
-					CS135StatusInterp = "One cloud base detected"
-				Case "2"
-					CS135StatusInterp = "Two cloud bases detected"
-				Case "3"
-					CS135StatusInterp = "Three cloud bases detected"
-				Case "4"
-					CS135StatusInterp = "Four cloud bases detected"
-				Case "5"
-					CS135StatusInterp = "Full obscuration determined but no cloud base detected"
-				Case "6"
-					CS135StatusInterp = "Some obscuration detected but determined to be transparent"
-				Case "/"
-					CS135StatusInterp = "Raw data input to algorithm missing or suspect"
-				Case Else
-					CS135StatusInterp = "Unable to interpret strStatus " & CS135MsgStatus
-				EndSelect
-			EndIf
-		EndIf
-		'Call Data Tables and Store Data
-		CallTable Table2
-	NextScan
+      'if the start and end are non-zero'
+      If ((lngCS135PSt>0) AND (lngCS135PEnd>0)) Then
+        'move is essentially copy'
+        'get the line 2 of the message'
+        Move(CS135L2,1,Mid(CS135Str,lngCS135PSt,lngCS135PEnd-lngCS135PSt),1)
+        'Two splits, first gets numbers.'
+        SplitStr(CS135_NumArr(),CS135L2," ",7,5)
+        'Second gets strings.
+        SplitStr(CS135_StrArr(),CS135L2," ",7,5)
+        'Check CRC to make sure message is complete and correct
+        lngCS135CRCMsg=HexToDec(Mid(CS135Str,(lngCS135PEnd+2),4))
+        lngCS135CRCCalc=CheckSum(CS135Str,18,CS135_Bytes-4) XOR &HFFFF
+        If (lngCS135CRCCalc=lngCS135CRCMsg) Then
+          CS135ChkSumF = True
+        Else
+          CS135ChkSumF = False
+        EndIf
+        'Get Heights (IEEE4) for table.
+        FirstHeight_ft=Mid(CS135L2,9,5)
+        SecondHeight_ft=Mid(CS135L2,15,5)
+        ThirdHeight_ft=Mid(CS135L2,21,5)
+        FourthHeight_ft=Mid(CS135L2,27,5)
+        CS135MsgStatus=Mid(CS135Status,Len(CS135Status)-1,1)
+        
+        Select Case CS135MsgStatus
+        Case "0"
+          CS135StatusInterp = "No significant back-scatter"
+        Case "1"
+          CS135StatusInterp = "One cloud base detected"
+        Case "2"
+          CS135StatusInterp = "Two cloud bases detected"
+        Case "3"
+          CS135StatusInterp = "Three cloud bases detected"
+        Case "4"
+          CS135StatusInterp = "Four cloud bases detected"
+        Case "5"
+          CS135StatusInterp = "Full obscuration determined but no cloud base detected"
+        Case "6"
+          CS135StatusInterp = "Some obscuration detected but determined to be transparent"
+        Case "/"
+          CS135StatusInterp = "Raw data input to algorithm missing or suspect"
+        Case Else
+          CS135StatusInterp = "Unable to interpret strStatus " & CS135MsgStatus
+        EndSelect
+      EndIf
+      If (Line3End > 0) Then
+        'get line 3 of message'
+        Move(CS135L3,1,Mid(CS135Str,lngCS135PEnd,Line3End-lngCS135PEnd),1)
+        L1_sky_con = Mid(CS135L3,2,2)
+        L2_sky_con = Mid(CS135L3,9,2)
+        L3_sky_con = Mid(CS135L3,16,2)
+        L4_sky_con = Mid(CS135L3,23,2)
+      EndIf
+      If (Line4End > 0) Then
+        Move(CS135L4,1,Mid(CS135Str,Line3End,Line4End - Line3End),1)
+        scale_param = Mid(CS135L4,1,5)
+        BS_res = Mid(CS135L4,7,2)
+        Prof_len = Mid(CS135L4,10,4)
+        las_en = Mid(CS135L4,15,3)
+        lt = Mid(CS135L4,19,3)
+        ti = Mid(CS135L4,23,2)
+        bl = Mid(CS135L4,26,4)
+        rate = Mid(CS135L4,32,2)
+      EndIf
+      If (Line5End >0) Then
+        Move(CS135L5,1,Mid(CS135Str,Line4End,Line5End - Line4End),1)
+        mh1 = Mid(CS135L5,1,5)
+        mhq1 = Mid(CS135L5,7,5)
+        mh2 = Mid(CS135L5,13,5)
+        mhq2 = Mid(CS135L5,19,5)
+      EndIf
+      If (Line6End > 0) Then
+        Move(CS135L6,1,Mid(CS135Str,Line5End,Line6End - Line5End),1)
+        scatter_prof = CS135L6
+      EndIf
+    EndIf
+
+    'Call Data Tables and Store Data
+    CallTable Table2
+  NextScan
 EndProg
